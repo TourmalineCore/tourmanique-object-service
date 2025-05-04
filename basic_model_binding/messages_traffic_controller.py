@@ -1,31 +1,38 @@
+import json
 import logging
+from threading import Thread
 
 from basic_model_binding.message_packer import MessagePacker
-from config.rabbitmq_config import rabbitmq_host, rabbitmq_username, rabbitmq_password, rabbitmq_blocked_connection_timeout, \
-    rabbitmq_heartbeat, rabbitmq_requests_exchange_name, rabbitmq_models_queues_dlx_name, \
+from config.rabbitmq_config import rabbitmq_host, rabbitmq_username, rabbitmq_password, \
+    rabbitmq_requests_exchange_name, rabbitmq_models_queues_dlx_name, \
     rabbitmq_models_retry_queue_dlx_name, rabbitmq_models_retry_queue_name, rabbitmq_models_retry_delay_ms, \
-    rabbitmq_models_max_retry_number, rabbitmq_results_queue_name
+    rabbitmq_models_max_retry_number, rabbitmq_results_exchange_name
+from helpers.append_result_to_database import AppendResultsCommand
 from model.object_model import ObjectModel
 
 from pika import ConnectionParameters, PlainCredentials, BlockingConnection, BasicProperties
 from pika.exceptions import ConnectionClosedByBroker, AMQPChannelError, AMQPConnectionError
 
+from model.model_result_schema import ModelResultSchema
+from config.model_config import processing_result_event_name
+
 connection_parameters = ConnectionParameters(
     host=str(rabbitmq_host),
+    port=7513,
     virtual_host='/',
     credentials=PlainCredentials(rabbitmq_username, rabbitmq_password),
-    blocked_connection_timeout=rabbitmq_blocked_connection_timeout,
-    heartbeat=rabbitmq_heartbeat,
 )
 
 
-class MessagesTrafficController:
+class MessagesTrafficController(Thread):
     def __init__(self, model_type):
         self.model_type = model_type
         self.model_request_queue_name = f'{self.model_type}-queue'
         self.message_packer = MessagePacker(model_type)
-        self.model = ObjectModel
+        self.model = ObjectModel()
         self.connection = BlockingConnection(connection_parameters)
+
+        super().__init__(target=self.start_listening_to_the_queue)
 
     def start_listening_to_the_queue(self):
         while True:
@@ -87,9 +94,17 @@ class MessagesTrafficController:
         photo_id, photo_bytes = self.message_packer.unpack_the_message_body(body)
 
         try:
-            result = self.submit_for_processing(photo_bytes)
-            message_with_result = self.message_packer.pack_the_message_body(photo_id, result)
-            self.put_message_to_result_queue(message_with_result)
+            model_result = self.submit_for_processing(photo_bytes, photo_id)
+
+            AppendResultsCommand().execute(model_result)
+
+            message_with_event = self.message_packer.pack_the_result_message_body(photo_id)
+
+            self.publish_message_to_exchange(
+                rabbitmq_results_exchange_name,
+                message_with_event,
+            )
+            logging.warning(f'Event {processing_result_event_name} for photo with id {photo_id} sended.')
 
         except Exception as e:
             logging.error('Unexpected error occurred: {0}'.format(e))
@@ -112,19 +127,37 @@ class MessagesTrafficController:
             retry_count = header_frame.headers['x-death'][0]['count']
         return retry_count
 
-    def put_message_to_result_queue(self, message_with_result):
+    def publish_message_to_exchange(self,
+                                    exchange_name,
+                                    message,
+                                    exchange_type='fanout'):
         channel = self.connection.channel()
-        channel.queue_declare(queue=rabbitmq_results_queue_name, durable=True)
+        channel.exchange_declare(exchange=exchange_name,
+                                 exchange_type=exchange_type)
 
-        channel.basic_publish(
-            exchange='',
-            routing_key=rabbitmq_results_queue_name,
-            body=message_with_result,
-            properties=BasicProperties(
-                delivery_mode=2,
+        try:
+            channel.basic_publish(
+                exchange=exchange_name,
+                routing_key='',
+                body=json.dumps(message).encode('utf-8'),
+                properties=BasicProperties(
+                    delivery_mode=2,
+                )
             )
-        )
+        except Exception:
+            logging.warning('Aborting...')
+            self.connection.close()
 
-    def submit_for_processing(self, photo_bytes):
-        processing_result = self.model().process_data(photo_bytes)
-        return processing_result
+    def submit_for_processing(
+        self, 
+        photo_bytes, 
+        photo_id,
+        ):
+        processing_result = self.model.process_data(photo_bytes)
+        validated_model_result = ModelResultSchema(
+                photo_id=photo_id,
+                model_type=self.model_type,
+                result=processing_result,
+            ).dict()
+
+        return validated_model_result

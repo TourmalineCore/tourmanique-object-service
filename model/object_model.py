@@ -19,22 +19,21 @@ from model.processing_model_base import ProcessingModelBase
 OBJECT_LABELS = pd.read_csv('./model/OBJECT_LABELS.csv')
 MODEL_NAME = "nvidia/segformer-b5-finetuned-ade-640-640"
 
-feature_extractor = SegformerFeatureExtractor.from_pretrained(MODEL_NAME)
-model = SegformerForSemanticSegmentation.from_pretrained(MODEL_NAME)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-
 
 class ObjectModel(ProcessingModelBase, ABC):
     def __init__(self):
+        self.feature_extractor = SegformerFeatureExtractor.from_pretrained(MODEL_NAME)
+        self.model = SegformerForSemanticSegmentation.from_pretrained(MODEL_NAME)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
         super().__init__()
 
     def process_data(self, bytes_data):
         started_time = datetime.now()
         image = Image.open(io.BytesIO(bytes_data)).convert('RGB')
 
-        pixel_values = feature_extractor(image, return_tensors="pt").pixel_values.to(device)
-        predict = model(pixel_values)
+        pixel_values = self.feature_extractor(image, return_tensors="pt").pixel_values.to(self.device)
+        predict = self.model(pixel_values)
         logits = nn.functional.interpolate(predict.logits.detach().cpu(),
                                            size=image.size[::-1],
                                            mode='bilinear',
