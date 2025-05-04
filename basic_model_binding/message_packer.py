@@ -1,7 +1,7 @@
 import json
 
-from model.model_result_schema import ModelResultSchema
 from helpers.s3_helper import S3Helper
+from config.model_config import processing_result_event_name
 
 
 class MessagePacker:
@@ -19,12 +19,10 @@ class MessagePacker:
 
         return photo_id, photo_bytes
 
-    def pack_the_message_body(self, photo_id: int, result):
-        valid_result = ModelResultSchema(
-            photo_id=photo_id,
-            model_type=self.model_type,
-            result=result,
-        )
-        message_body = json.dumps(valid_result.dict()).encode('utf-8')
+    def pack_the_result_message_body(self, photo_id: int):
+        message_body = {
+                'photo_id': photo_id,
+                'event': processing_result_event_name,
+            }
 
         return message_body

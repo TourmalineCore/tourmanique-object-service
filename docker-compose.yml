@@ -4,12 +4,13 @@ services:
   run-model-locally:
     container_name: objects-model-local-starter
     restart: "no"
-    image: tianon/true
+    image: tianon/true:multiarch
     depends_on:
       - objects-model
 
   objects-model:
     container_name: objects-model
+    command: poetry run flask run
     build:
       context: .
     image: objects-model:latest
@@ -19,8 +20,37 @@ services:
     env_file:
       - .env
     networks:
-      - tourmanique-api-private_tourmanique-net
+      - internal
+    depends_on:
+      - objects-model-postgres
+    deploy:
+      resources:
+        limits:
+          cpus: '3'
+          memory: 7gb
+    ports:
+      - "7541:5000"
+
+  objects-model-postgres:
+    container_name: objects-model-postgres
+    image: postgres:13.3-alpine
+    restart: always
+    volumes:
+      - objects-model-postgres-data:/var/lib/postgresql/data/
+    healthcheck:
+      test: "pg_isready -U $$POSTGRES_USER"
+      timeout: 10s
+      interval: 10s
+      retries: 3
+    networks:
+      - internal
+    env_file:
+      - .env
+    ports:
+      - "7540:5432"
 
 networks:
-  tourmanique-api-private_tourmanique-net:
-    external: true
+  internal: {}
+
+volumes:
+  objects-model-postgres-data:
