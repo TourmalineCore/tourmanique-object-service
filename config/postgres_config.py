@@ -1,12 +1,16 @@
 import os
 
 postgres_host = os.getenv('POSTGRES_HOST')
+postgres_port = os.getenv('POSTGRES_PORT')
 postgres_database = os.getenv('POSTGRES_DB')
 postgres_username = os.getenv('POSTGRES_USER')
 postgres_password = os.getenv('POSTGRES_PASSWORD')
 
 if postgres_host is None:
     raise ValueError('You should specify POSTGRES_HOST environment variable to be able to connect to PostgreSQL DB Server.')
+
+if postgres_port is None:
+    raise ValueError('You should specify POSTGRES_PORT environment variable to be able to connect to PostgreSQL DB Server.')
 
 if postgres_database is None:
     raise ValueError('You should specify POSTGRES_DB environment variable to be able to connect to PostgreSQL DB Server.')

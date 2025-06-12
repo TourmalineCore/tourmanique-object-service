@@ -6,7 +6,7 @@ from basic_model_binding.message_packer import MessagePacker
 from config.rabbitmq_config import rabbitmq_host, rabbitmq_username, rabbitmq_password, \
     rabbitmq_requests_exchange_name, rabbitmq_models_queues_dlx_name, \
     rabbitmq_models_retry_queue_dlx_name, rabbitmq_models_retry_queue_name, rabbitmq_models_retry_delay_ms, \
-    rabbitmq_models_max_retry_number, rabbitmq_results_exchange_name
+    rabbitmq_models_max_retry_number, rabbitmq_results_exchange_name, rabbitmq_port
 from helpers.append_result_to_database import AppendResultsCommand
 from model.object_model import ObjectModel
 
@@ -18,7 +18,7 @@ from config.model_config import processing_result_event_name
 
 connection_parameters = ConnectionParameters(
     host=str(rabbitmq_host),
-    port=7513,
+    port=rabbitmq_port,
     virtual_host='/',
     credentials=PlainCredentials(rabbitmq_username, rabbitmq_password),
 )

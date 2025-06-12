@@ -1,6 +1,7 @@
 import os
 
 rabbitmq_host = os.getenv('RABBITMQ_HOST')
+rabbitmq_port = int(os.getenv('RABBITMQ_PORT'))
 rabbitmq_username = os.getenv('RABBITMQ_DEFAULT_USER')
 rabbitmq_password = os.getenv('RABBITMQ_DEFAULT_PASS')
 
@@ -14,6 +15,9 @@ rabbitmq_results_exchange_name = os.getenv('RABBITMQ_RESULTS_EXCHANGE_NAME')
 
 if rabbitmq_host is None:
     raise ValueError('You should specify RABBITMQ_HOST to be able to connect to RabbitMQ.')
+
+if rabbitmq_port is None:
+    raise ValueError('You should specify RABBITMQ_PORT to be able to connect to RabbitMQ.')
 
 if rabbitmq_username is None:
     raise ValueError('You should specify RABBITMQ_USERNAME to be able to connect to RabbitMQ.')
